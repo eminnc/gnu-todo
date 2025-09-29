@@ -44,22 +44,25 @@ fi
 RES=$(
 yad --form --center --borders=12 --width=520 --title="Hızlı Hatırlatma" \
   --field="Başlık":TXT "" \
+  --field="Kategori":CB "Genel!İş!Kişisel!Sağlık!Eğitim!Alışveriş!Diğer" \
   --field="Tarih":D "$(date +%Y-%m-%d)" \
   --field="Saat":T "$(date -d "+${DEFAULT_DURATION} minute" +%H:%M)" \
   --field="Tekrarlama":CB "$REPEAT_OPTIONS" \
   --field="Ses":CB "$SOUND_OPTIONS" \
-  --tab-order="1,2,3,4,5" \
+  --tab-order="1,2,3,4,5,6" \
   --separator="|"
 ) || exit 0
 
-IFS='|' read -r DESC DATE_IN TIME_IN REPEAT SOUND <<<"$RES"
+IFS='|' read -r DESC CATEGORY DATE_IN TIME_IN REPEAT SOUND <<<"$RES"
 [[ -z "${DESC// }" ]] && yad --image=dialog-error --text="Açıklama boş olamaz." && exit 1
 
 # Varsayılan değerleri ayarla (eğer boşsa veya ilk seçenekse)
+[[ -z "${CATEGORY// }" ]] && CATEGORY="Genel"
 [[ -z "${REPEAT// }" ]] && REPEAT="$DEFAULT_REPEAT"
 [[ -z "${SOUND// }" ]] && SOUND="$DEFAULT_SOUND"
 
 # Eğer form ilk seçenekleri döndürdüyse varsayılanları kullan
+[[ "$CATEGORY" == "Genel" ]] && CATEGORY="Genel"
 [[ "$REPEAT" == "Yok" ]] && REPEAT="$DEFAULT_REPEAT"
 [[ "$SOUND" == "Freedesktop Bell" ]] && SOUND="$DEFAULT_SOUND"
 
@@ -150,7 +153,7 @@ schedule_one() {
 export DISPLAY='${DISPLAY_VAL}'
 export XDG_RUNTIME_DIR='${XDG_RUNTIME_DIR_VAL}'
 ${DBUS_VAL:+export DBUS_SESSION_BUS_ADDRESS='${DBUS_VAL}'}
-notify-send -u normal -a 'Hatırlatma' '⏰ Hatırlatma' '${DESC}'
+notify-send -u normal -a 'Hatırlatma' '${DESC}'
 ${PLAY_SOUND_SNIPPET}
 EOF
 
@@ -183,7 +186,7 @@ JOBS_CSV=$(IFS=,; echo "${JOB_IDS[*]}")
 # --- SQLite veritabanına kaydet ---
 FINAL_DATE=$(date -d "@$TARGET_EPOCH" +%Y-%m-%d)
 FINAL_TIME=$(date -d "@$TARGET_EPOCH" +%H:%M)
-sqlite3 "$DB_FILE" "INSERT INTO reminders (date, time, repeat_type, description, jobs_csv) VALUES ('$FINAL_DATE', '$FINAL_TIME', '$REPEAT', '$DESC', '$JOBS_CSV')"
+sqlite3 "$DB_FILE" "INSERT INTO reminders (date, time, repeat_type, description, category, jobs_csv) VALUES ('$FINAL_DATE', '$FINAL_TIME', '$REPEAT', '$DESC', '$CATEGORY', '$JOBS_CSV')"
 
 # Test: Eğer şu anki tarih/saat/dakika ise hemen bildirim gönder (saniye yok)
 CURRENT_DATE_TIME=$(date +%Y-%m-%d_%H:%M)
@@ -191,7 +194,7 @@ TARGET_DATE_TIME=$(date -d "@$TARGET_EPOCH" +%Y-%m-%d_%H:%M)
 if [[ "$TARGET_DATE_TIME" == "$CURRENT_DATE_TIME" ]]; then
     # Do Not Disturb kontrolü
     if [[ "$DO_NOT_DISTURB" == "true" ]] || ! pgrep -f "do-not-disturb\|dnd" >/dev/null 2>&1; then
-        notify-send -u normal -a 'Hatırlatma' '⏰ Hatırlatma' "$DESC"
+        notify-send -u normal -a 'Hatırlatma' "$DESC"
         if [[ "$SOUND" != "Ses Yok" ]]; then
         case "$SOUND" in
             "Yaru Complete")
